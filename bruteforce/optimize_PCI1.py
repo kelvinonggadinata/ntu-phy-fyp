@@ -1,5 +1,8 @@
+#Optimization for PCI1 with KL divergence rate as the distance measure
+
 import numpy as np
 from scipy import optimize
+from scipy import random
 from scipy.stats import entropy
 import matplotlib.pyplot as plt
 
@@ -40,21 +43,42 @@ def initialize_x(N, init_type='normal'):
     return x
 
 def cmu_Q(x):
+    '''
+    Statistical complexity expression for process Q
+    
+    x: array_like
+       Free parameters of process Q. In this case only one element (free parameter)
+    '''
     q = x[0]
     return -p*np.log2(p/(p+q))/(p+q) - q*np.log2(q/(p+q))/(p+q)
 
 def cons_c(x):
+    '''
+    Constraint function: KL divergence rate (closed-form expression for Markov chains)
+    '''
     q = x[0]
     return [0.5*(p*np.log2(p/q) + (1-p)*np.log2((1-p)/(1-q)) )]
 
 def cons_J(x):
+    '''
+    Jacobian of the constraint function
+    '''
     q = x[0]
     return [[(-p/q + (1-p)/(1-q))/(2*np.log(2))]]
 
 def cons_H(x, v):
+    '''
+    Hessian matrix of the constraint function. 
+    It is written in a linear combination fashion: H(x,v) = \sum_{i}v_{i}\nabla^2c_{i}(x), 
+    where v_{i} is Lagrange multiplier for constraint c_{i}
+    
+    v: array_like
+       Lagrange multipliers
+    '''
     q = x[0]   
     return v[0]*array([[(p/q**2 + (1-p)/(1-q**2))/(2*np.log(2))]])
 
+#Bounds for the free parameters
 bounds = optimize.Bounds([pmin], [pmax])
 
 # %% Data acquisition: minimal statistical complexity as a function of delta (maximum distance limit)
@@ -62,16 +86,16 @@ bounds = optimize.Bounds([pmin], [pmax])
 N = 50
 delta = np.linspace(0.001, 0.75, N)
 
+#Create empty array for solutions
 q_optimal = np.array([])
 cmu_optimal = np.array([])
+
+#Find solutions for every delta
 for i in range(N):
     R = delta[i]*2
     while np.abs(R-delta[i])>1E-4:
-#        print(i)
         print(R, delta[i])
-        x0 = initialize_x(1, init_type='normal')
-#        x0 = np.array([0.15])
-        #print('x0: ', x0)
+        x0 = initialize_x(1, init_type='normal') #Must be length of one
         
         nonlinear_constraint = optimize.NonlinearConstraint(cons_c, lb=0.0, ub=delta[i], jac='3-point', hess=optimize.BFGS())
         res = optimize.minimize(cmu_Q, x0, method='trust-constr',
@@ -84,7 +108,8 @@ for i in range(N):
     q_optimal = np.append(q_optimal, q)
     cmu = entropy([p, q.item(0)], base=2)
     cmu_optimal = np.append(cmu_optimal, cmu)
-    
+
+#Plot the solutions
 plt.figure(figsize = [10,6.4])
 plt.xlabel('$\\delta$', fontsize=15)
 plt.ylabel('$C_{\\mu}(Q^*)$', fontsize=15)

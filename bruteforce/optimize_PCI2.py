@@ -1,6 +1,8 @@
-from scipy import *
-from scipy import optimize
+#Optimization for PCI2 with KL divergence rate as the distance measure
+
 import numpy as np
+from scipy import optimize
+from scipy import random
 from scipy.stats import entropy
 import matplotlib.pyplot as plt
 
@@ -8,8 +10,8 @@ import matplotlib.pyplot as plt
 p = 0.75
 
 acc = 1E-15
-pmax = 1.0-acc
 pmin = 0.0+acc
+pmax = 1.0-acc
 
 # %% Functions for the optimization
 
@@ -42,7 +44,10 @@ def initialize_x(N, init_type='normal'):
 
 def cmu_Q(x):
     '''
-    Statistical complexity of PCI2
+    Statistical complexity expression for process Q
+    
+    x: array_like
+       Free parameters of process Q. In this case it should have two elements
     '''
     q1, q2 = x
     q = q1+q2
@@ -61,7 +66,7 @@ def der_cmu_Q(x):
 
 def cons_c(x):
     '''
-    Constraint function. KL divergence rate (closed-form expression for Markov chains)
+    Constraint function: KL divergence rate (closed-form expression for Markov chains)
     '''
     q1, q2 = x
     return [0.5*(p*np.log2(p/q1) + p*np.log2(p/q2) + (1-p)*np.log2((1-p)/(1-q1)) +  (1-p)*np.log2((1-p)/(1-q2)))]
@@ -75,20 +80,29 @@ def cons_J(x):
 
 def cons_H(x, v):
     '''
-    Hessian matrix of the constraint function=
+    Hessian matrix of the constraint function. 
+    It is written in a linear combination fashion: H(x,v) = \sum_{i}v_{i}\nabla^2c_{i}(x), 
+    where v_{i} is Lagrange multiplier for constraint c_{i}
+    
+    v: array_like
+       Lagrange multipliers
     '''
     q1, q2 = x   
     return v[0]*array([[(p/q1**2 + (1-p)/(1-q1**2))/(2*np.log(2)), 0], [0, (p/q2**2 + (1-p)/(1-q2**2))/(2*np.log(2))]])
+
+#Bounds for the free parameters
+bounds = optimize.Bounds([pmin, pmin], [pmax, pmax])
 
 # %% Data acquisition: minimal statistical complexity as a function of delta (maximum distance limit)
 
 N = 50
 delta = np.linspace(0.001, 0.75, N)
 
-bounds = optimize.Bounds([pmin, pmin], [pmax, pmax])
-
+#Create empty array for solutions
 q_optimal = np.array([])
 cmu_optimal = np.array([])
+
+#Find solutions for every delta
 for i in range(N):
     R = delta[i]*2
     while np.abs(R-delta[i])>1E-5:
@@ -106,6 +120,7 @@ for i in range(N):
     cmu = entropy(q, base=2)
     cmu_optimal = np.append(cmu_optimal, cmu)
     
+#Plot solutions
 plt.figure(figsize = [10,6.4])
 plt.xlabel('$\\delta$', fontsize=15)
 plt.ylabel('$C_{\\mu}(Q^*)$', fontsize=15)
